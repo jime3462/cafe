@@ -92,7 +92,7 @@ Resources:
         - IpProtocol: tcp
           FromPort: 22
           ToPort: 22
-          CidrIp: !Ref WorkstationIP
+          CidrIp: !Sub ${WorkstationIP}/32
 
   ELBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
