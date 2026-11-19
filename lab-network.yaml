@@ -179,7 +179,7 @@ Outputs:
     Description: Private subnet A ID
     Value: !Ref PrivateSubnetA
     Export:
-      Name: !Sub ${AWS::StackName}-PrivateSubnetAID
+      Name: !Sub ${AWS::StackName}-PrivateSubnetA
 
   PrivateSubnetBId:
     Description: Private subnet B ID
