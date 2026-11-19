@@ -41,10 +41,10 @@ Parameters:
     Type: AWS::EC2::Image::Id
     Default: ami-059452760336fb10f
 
-  # Existing IAM Role
+  # Existing IAM Role/Instance Profile
   CafeIAMRole:
-    Type: AWS::IAM::InstanceProfile::Name
-    Default: cafe-app-role
+    Type: String
+    Default: arn:aws:iam::073639462324:instance-profile/cafe-app-role
 
 
   # Existing Key Pair
@@ -143,7 +143,8 @@ Resources:
       InstanceType: t3.micro
       KeyName: !Ref CafeKeyPair
       ImageId: !Ref AmazonLinuxAMIID
-      IamInstanceProfile: !Ref CafeIAMRole
+      IamInstanceProfile: 
+        Arn: !Ref CafeIAMRole
       SecurityGroupIds:
         - !Ref BastionSecurityGroup
       SubnetId:
@@ -233,7 +234,7 @@ Resources:
         InstanceType: t3.micro
         KeyName: !Ref CafeKeyPair
         IamInstanceProfile:
-          Name: !Ref CafeIAMRole
+          Arn: !Ref CafeIAMRole
         SecurityGroupIds:
           - !Ref WebServerSecurityGroup
         MetadataOptions:
