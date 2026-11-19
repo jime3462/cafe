@@ -16,7 +16,7 @@ Resources:
 
   ## VPC
 
-  VPC:
+  CafeVPC:
     Type: AWS::EC2::VPC
     Properties:
       EnableDnsSupport: true
@@ -31,15 +31,32 @@ Resources:
   VPCGatewayAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
     Properties:
-      VpcId: !Ref VPC
+      VpcId: !Ref CafeVPC
       InternetGatewayId: !Ref InternetGateway
   
-  ## Public Route Table
+  ## Regional NAT Gateway
+  RegionalNatGateway:
+    Type: AWS::EC2::NatGateway
+    DependsOn: VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref CafeVPC
+      AvailabilityMode: regional
+      ConnectivityType: public
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-regional-nat'
+  
+  ## Route Tables
 
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
-      VpcId: !Ref VPC
+      VpcId: !Ref CafeVPC
+
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref CafeVPC
   
   PublicRoute:
     Type: AWS::EC2::Route
@@ -48,47 +65,120 @@ Resources:
       RouteTableId: !Ref PublicRouteTable
       DestinationCidrBlock: 0.0.0.0/0
       GatewayId: !Ref InternetGateway
+
+  PrivateRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref RegionalNatGateway
+
+  ## Public & Private Subnets
   
-  ## Public Subnet
-  
-  PublicSubnet:
+  PublicSubnetA:
     Type: AWS::EC2::Subnet
     Properties:
-      VpcId: !Ref VPC
+      VpcId: !Ref CafeVPC
       CidrBlock: 10.0.0.0/24
       AvailabilityZone: !Select 
         - 0
         - !GetAZs 
           Ref: AWS::Region
   
-  PublicSubnetRouteTableAssociation:
+  PublicSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref CafeVPC
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: !Select 
+        - 1
+        - !GetAZs 
+          Ref: AWS::Region
+
+  PrivateSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref CafeVPC
+      CidrBlock: 10.0.2.0/23
+      AvailabilityZone: !Select 
+        - 0
+        - !GetAZs 
+          Ref: AWS::Region
+
+  PrivateSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref CafeVPC
+      CidrBlock: 10.0.4.0/23
+      AvailabilityZone: !Select 
+        - 1
+        - !GetAZs 
+          Ref: AWS::Region
+
+  PublicSubnetARouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      SubnetId: !Ref PublicSubnet
+      SubnetId: !Ref PublicSubnetA
       RouteTableId: !Ref PublicRouteTable
-  
-  PublicSubnetNetworkAclAssociation:
-    Type: AWS::EC2::SubnetNetworkAclAssociation
+
+  PublicSubnetBRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
-      SubnetId: !Ref PublicSubnet
-      NetworkAclId: !GetAtt 
-        - VPC
-        - DefaultNetworkAcl
+      SubnetId: !Ref PublicSubnetB
+      RouteTableId: !Ref PublicRouteTable
+
+  PrivateSubnetARouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnetA
+      RouteTableId: !Ref PrivateRouteTable
+
+  PrivateSubnetBRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnetB
+      RouteTableId: !Ref PrivateRouteTable
+  
   
 ######################
 # Outputs section
 ######################
 
 Outputs:
-  
-  PublicSubnet:
-    Description: The subnet ID to use for public web servers
-    Value: !Ref PublicSubnet
-    Export:
-      Name: !Sub '${AWS::StackName}-SubnetID'
-
-  VPC:
+  VpcId:
     Description: VPC ID
-    Value: !Ref VPC
+    Value: !Ref CafeVPC
     Export:
-      Name: !Sub '${AWS::StackName}-VPCID'
+      Name: !Sub ${AWS::StackName}-VPCID
+
+  InternetGatewayId:
+    Description: Internet Gateway ID
+    Value: !Ref InternetGateway
+
+  RegionalNatGatewayId:
+    Description: Regional NAT Gateway ID
+    Value: !Ref RegionalNatGateway
+
+  PublicSubnetAId:
+    Description: Public subnet A ID
+    Value: !Ref PublicSubnetA
+    Export:
+      Name: !Sub ${AWS::StackName}-PublicSubnetAID
+
+  PublicSubnetBId:
+    Description: Public subnet B ID
+    Value: !Ref PublicSubnetB
+    Export:
+      Name: !Sub ${AWS::StackName}-PublicSubnetBID
+
+  PrivateSubnetAId:
+    Description: Private subnet A ID
+    Value: !Ref PrivateSubnetA
+  Export:
+      Name: !Sub ${AWS::StackName}-PrivateSubnetAID
+
+  PrivateSubnetBId:
+    Description: Private subnet B ID
+    Value: !Ref PrivateSubnetB
+  Export:
+      Name: !Sub ${AWS::StackName}-PrivateSubnetBID
