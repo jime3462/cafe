@@ -80,6 +80,7 @@ Resources:
     Properties:
       VpcId: !Ref CafeVPC
       CidrBlock: 10.0.0.0/24
+      MapPublicIpOnLaunch: true
       AvailabilityZone: !Select 
         - 0
         - !GetAZs 
@@ -90,6 +91,7 @@ Resources:
     Properties:
       VpcId: !Ref CafeVPC
       CidrBlock: 10.0.1.0/24
+      MapPublicIpOnLaunch: true
       AvailabilityZone: !Select 
         - 1
         - !GetAZs 
@@ -100,6 +102,7 @@ Resources:
     Properties:
       VpcId: !Ref CafeVPC
       CidrBlock: 10.0.2.0/23
+      MapPublicIpOnLaunch: false
       AvailabilityZone: !Select 
         - 0
         - !GetAZs 
@@ -110,6 +113,7 @@ Resources:
     Properties:
       VpcId: !Ref CafeVPC
       CidrBlock: 10.0.4.0/23
+      MapPublicIpOnLaunch: false
       AvailabilityZone: !Select 
         - 1
         - !GetAZs 
@@ -163,22 +167,22 @@ Outputs:
     Description: Public subnet A ID
     Value: !Ref PublicSubnetA
     Export:
-      Name: !Sub ${AWS::StackName}-PublicSubnetAID
+      Name: !Sub ${AWS::StackName}-PublicSubnetA
 
   PublicSubnetBId:
     Description: Public subnet B ID
     Value: !Ref PublicSubnetB
     Export:
-      Name: !Sub ${AWS::StackName}-PublicSubnetBID
+      Name: !Sub ${AWS::StackName}-PublicSubnetB
 
   PrivateSubnetAId:
     Description: Private subnet A ID
     Value: !Ref PrivateSubnetA
-  Export:
+    Export:
       Name: !Sub ${AWS::StackName}-PrivateSubnetAID
 
   PrivateSubnetBId:
     Description: Private subnet B ID
     Value: !Ref PrivateSubnetB
-  Export:
-      Name: !Sub ${AWS::StackName}-PrivateSubnetBID
+    Export:
+      Name: !Sub ${AWS::StackName}-PrivateSubnetB
