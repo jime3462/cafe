@@ -143,8 +143,7 @@ Resources:
       InstanceType: t3.micro
       KeyName: !Ref CafeKeyPair
       ImageId: !Ref AmazonLinuxAMIID
-      IamInstanceProfile: 
-        Arn: !Ref CafeIAMRole
+      IamInstanceProfile: !Ref CafeIAMRole
       SecurityGroupIds:
         - !Ref BastionSecurityGroup
       SubnetId:
@@ -155,6 +154,7 @@ Resources:
   CafeDBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
+      DBSubnetGroupDescription: Subnet group for the Cafe RDS database
       SubnetIds:
         - Fn::ImportValue:
             !Sub ${NetworkStackName}-PrivateSubnetA
