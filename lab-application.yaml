@@ -143,7 +143,7 @@ Resources:
       InstanceType: t3.micro
       KeyName: !Ref CafeKeyPair
       ImageId: !Ref AmazonLinuxAMIID
-      IamInstanceProfile: !Ref CafeIAMRole
+      IamInstanceProfile: !Select [1, !Split ["/", !Ref CafeIAMRole]]
       SecurityGroupIds:
         - !Ref BastionSecurityGroup
       SubnetId:
