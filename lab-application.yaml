@@ -23,6 +23,52 @@ Parameters:
     AllowedPattern: '^[a-zA-Z][-a-zA-Z0-9]*$'
     Default: lab-network
 
+  # Workstation IP
+  WorkstationIP:
+    Description: >-
+      The public IP address of the workstation that will be used to connect to
+      the EC2 instance. This is used to create a security group rule that allows
+      SSH access from this IP address.
+    Type: String
+    MinLength: 7
+    MaxLength: 15
+    AllowedPattern: '^[0-9]{1,3}(\.[0-9]{1,3}){3}$'
+    ConstraintDescription: Must be a valid IPv4 address in the format x.x.x.x
+    Default: 96.82.202.178
+
+  # Existing AMI
+  CafeAMI:
+    Type: AWS::EC2::Image::Id
+    Default: ami-059452760336fb10f
+
+  # Existing IAM Role
+  CafeIAMRole:
+    Type: AWS::IAM::InstanceProfile::Name
+    Default: cafe-app-role
+
+
+  # Existing Key Pair
+  CafeKeyPair:
+    Type: AWS::EC2::KeyPair::KeyName
+    Default: cafe-app-key
+
+  # Auto Scaling Group Sizes
+  ASGMinSize:
+    Type: Number
+    Default: 2
+    MinValue: 2
+
+  ASGMaxSize:
+    Type: Number
+    Default: 6
+    MinValue: 2  
+
+  # RDS Database Password
+  DBPassword:
+    Type: String
+    NoEcho: true
+  
+
   AmazonLinuxAMIID:
     Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
     Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
@@ -33,78 +79,26 @@ Parameters:
 
 Resources:
 
-  WebServerInstance:
-    Type: AWS::EC2::Instance
-    Metadata:
-      'AWS::CloudFormation::Init':
-        configSets:
-          All:
-            - ConfigureSampleApp
-        ConfigureSampleApp:
-          packages:
-            yum:
-              httpd: []
-          files:
-            /var/www/html/index.html:
-              content: |
-                <img src="https://s3.amazonaws.com/cloudformation-examples/cloudformation_graphic.png" alt="AWS CloudFormation Logo"/>
-                <h1>Congratulations, you have successfully launched the AWS CloudFormation sample.</h1>
-              mode: 000644
-              owner: apache
-              group: apache
-          services:
-            sysvinit:
-              httpd:
-                enabled: true
-                ensureRunning: true
-    Properties:
-      InstanceType: t2.micro
-      ImageId: !Ref AmazonLinuxAMIID
-      NetworkInterfaces:
-        - GroupSet:
-            - !Ref WebServerSecurityGroup
-          AssociatePublicIpAddress: true
-          DeviceIndex: 0
-          DeleteOnTermination: true
-          SubnetId:
-            Fn::ImportValue:
-              !Sub ${NetworkStackName}-SubnetID
-      Tags:
-        - Key: Name
-          Value: Web Server
-      UserData:
-        Fn::Base64: !Sub |
-          #!/bin/bash -xe
-          yum update -y aws-cfn-bootstrap
-          # Install the files and packages from the metadata
-          /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource WebServerInstance --configsets All --region ${AWS::Region}
-          # Signal the status from cfn-init
-          /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackName} --resource WebServerInstance --region ${AWS::Region}
-    CreationPolicy:
-      ResourceSignal:
-        Timeout: PT5M
-
-  DiskVolume:
-    Type: AWS::EC2::Volume
-    Properties:
-      Size: 100
-      AvailabilityZone: !GetAtt WebServerInstance.AvailabilityZone
-      Tags:
-        - Key: Name
-          Value: Web Data
-    DeletionPolicy: Snapshot
-
-  DiskMountPoint:
-    Type: AWS::EC2::VolumeAttachment
-    Properties:
-      InstanceId: !Ref WebServerInstance
-      VolumeId: !Ref DiskVolume
-      Device: /dev/sdh
-
-  WebServerSecurityGroup:
+  # Security Groups
+  BastionSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Enable HTTP ingress
+      GroupName: bastion-sg
+      GroupDescription: Allow SSH from your workstation IP
+      VpcId:
+        Fn::ImportValue:
+          !Sub ${NetworkStackName}-VPCID
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref WorkstationIP
+
+  ELBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: elb-sg
+      GroupDescription: Allow HTTP traffic from the Internet
       VpcId:
         Fn::ImportValue:
           !Sub ${NetworkStackName}-VPCID
@@ -113,15 +107,210 @@ Resources:
           FromPort: 80
           ToPort: 80
           CidrIp: 0.0.0.0/0
-      Tags:
-        - Key: Name
-          Value: Web Server Security Group
 
+  WebServerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: web-sg
+      GroupDescription: Allow HTTP traffic from elb-sg
+      VpcId:
+        Fn::ImportValue:
+          !Sub ${NetworkStackName}-VPCID
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          SourceSecurityGroupId: !Ref ELBSecurityGroup
+
+  RDSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: rds-sg
+      GroupDescription: Allow port 3306 from web-sg
+      VpcId:
+        Fn::ImportValue:
+          !Sub ${NetworkStackName}-VPCID
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId: !Ref WebServerSecurityGroup
+
+  # Bastion Host
+  BastionHost:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t3.micro
+      KeyName: !Ref CafeKeyPair
+      ImageId: !Ref AmazonLinuxAMIID
+      IamInstanceProfile: !Ref CafeIAMRole
+      SecurityGroupIds:
+        - !Ref BastionSecurityGroup
+      SubnetId:
+        Fn::ImportValue:
+          !Sub ${NetworkStackName}-PublicSubnetA
+
+  # RDS Subnet Group
+  CafeDBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      SubnetIds:
+        - Fn::ImportValue:
+            !Sub ${NetworkStackName}-PrivateSubnetA
+        - Fn::ImportValue:
+            !Sub ${NetworkStackName}-PrivateSubnetB
+
+  # RDS Database
+  CafeDatabase:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: cafe-db
+      AllocatedStorage: 20
+      StorageType: gp2
+      DBInstanceClass: db.t3.micro
+      Engine: mariadb
+      EngineVersion: 10.6.25
+      MasterUsername: admin
+      MasterUserPassword: !Ref DBPassword
+      MultiAZ: true
+      DBSubnetGroupName: !Ref CafeDBSubnetGroup
+      VPCSecurityGroups:
+        - !Ref RDSSecurityGroup
+      PubliclyAccessible: false
+
+  # Target Group for Load Balancer
+  CafeTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: cafe-tg
+      VpcId:
+        Fn::ImportValue:
+          !Sub ${NetworkStackName}-VPCID
+      Port: 80
+      Protocol: HTTP
+      ProtocolVersion: HTTP1
+      IpAddressType: ipv4
+      TargetType: instance
+      HealthCheckProtocol: HTTP
+      HealthCheckPort: traffic-port
+      HealthCheckPath: /index.php
+
+  # Load Balancer
+  CafeLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: cafe-lb
+      Scheme: internet-facing
+      Type: application
+      IpAddressType: ipv4
+      
+      Subnets:
+        - Fn::ImportValue:
+            !Sub ${NetworkStackName}-PublicSubnetA
+        - Fn::ImportValue:
+            !Sub ${NetworkStackName}-PublicSubnetB
+      SecurityGroups:
+        - !Ref ELBSecurityGroup
+
+  CafeListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref CafeLoadBalancer
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref CafeTargetGroup
+
+
+  # Launch Template
+  CafeLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: cafe-lt
+      LaunchTemplateData:
+        ImageId: !Ref CafeAMI
+        InstanceType: t3.micro
+        KeyName: !Ref CafeKeyPair
+        IamInstanceProfile:
+          Name: !Ref CafeIAMRole
+        SecurityGroupIds:
+          - !Ref WebServerSecurityGroup
+        MetadataOptions:
+          HttpEndpoint: enabled
+          HttpTokens: required
+        UserData: !Base64
+          'Fn::Sub': |
+            #!/bin/bash
+            dnf update -y
+            dnf install -y httpd php
+            service httpd start
+            chkconfig httpd on
+            aws s3 cp s3://seis665-public/index.php /var/www/html/
+
+  # Auto Scaling Group
+  CafeAutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: cafe-asg
+      LaunchTemplate:
+        LaunchTemplateId: !Ref CafeLaunchTemplate
+        Version: !GetAtt CafeLaunchTemplate.LatestVersionNumber
+      VPCZoneIdentifier:
+        - Fn::ImportValue:
+            !Sub ${NetworkStackName}-PrivateSubnetA
+        - Fn::ImportValue:
+            !Sub ${NetworkStackName}-PrivateSubnetB
+      AvailabilityZoneDistribution:
+        CapacityDistributionStrategy: balanced-best-effort
+      TargetGroupARNs:
+        - !Ref CafeTargetGroup
+      DesiredCapacity: 2
+      MinSize: !Ref ASGMinSize
+      MaxSize: !Ref ASGMaxSize
+      HealthCheckType: ELB
+      HealthCheckGracePeriod: 300
+      
+  CafeTargetTrackingPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AutoScalingGroupName: !Ref CafeAutoScalingGroup
+      PolicyType: TargetTrackingScaling
+      TargetTrackingConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: ASGAverageCPUUtilization
+        TargetValue: 25.0
+      
+      
 ######################
 # Outputs section
 ######################
 
 Outputs:
   URL:
-    Description: URL of the sample website
-    Value: !Sub 'http://${WebServerInstance.PublicDnsName}'
+    Description: URL of the cafe website
+    Value: !Sub 'http://${CafeLoadBalancer.DNSName}'
+
+  LoadBalancerDNSName:
+    Description: DNS name of the application load balancer
+    Value: !GetAtt CafeLoadBalancer.DNSName
+
+  DatabaseEndpoint:
+    Description: RDS database endpoint address
+    Value: !GetAtt CafeDatabase.Endpoint.Address
+
+  DatabasePort:
+    Description: RDS database endpoint port
+    Value: !GetAtt CafeDatabase.Endpoint.Port
+
+  AutoScalingGroupName:
+    Description: Auto Scaling Group name
+    Value: !Ref CafeAutoScalingGroup
+
+  LaunchTemplateId:
+    Description: EC2 launch template ID
+    Value: !Ref CafeLaunchTemplate
+
+  BastionHostId:
+    Description: Bastion host instance ID
+    Value: !Ref BastionHost
