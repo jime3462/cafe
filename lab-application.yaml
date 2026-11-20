@@ -35,7 +35,7 @@ Parameters:
     MaxLength: 15
     AllowedPattern: '^[0-9]{1,3}(\.[0-9]{1,3}){3}$'
     ConstraintDescription: Must be a valid IPv4 address in the format x.x.x.x
-    Default: 96.82.202.178
+    NoEcho: true
 
   # Existing AMI
   CafeAMI:
