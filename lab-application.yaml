@@ -290,7 +290,7 @@ Resources:
 Outputs:
   URL:
     Description: URL of the cafe website
-    Value: !Sub 'http://${CafeLoadBalancer.DNSName}'
+    Value: !Sub 'http://${CafeLoadBalancer.DNSName}/cafe'
 
   LoadBalancerDNSName:
     Description: DNS name of the application load balancer
