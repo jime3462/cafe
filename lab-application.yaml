@@ -1,7 +1,8 @@
 AWSTemplateFormatVersion: 2010-09-09
 Description: >-
-  Application Template: Demonstrates how to reference resources from a different stack.
-  This template provisions an EC2 instance in a VPC Subnet provisioned in a different stack.
+  Application Template: Provisions the Cafe application using networking resources
+  imported from a separate stack. It creates a bastion host, application load
+  balancer, Auto Scaling group, launch template, and RDS MariaDB database.
 
 # This template creates:
 #   Amazon EC2 instance
@@ -39,7 +40,7 @@ Parameters:
   # Existing AMI
   CafeAMI:
     Type: AWS::EC2::Image::Id
-    Default: ami-059452760336fb10f
+    Default: ami-07db131af3e9581c7
 
   # Existing IAM Role/Instance Profile
   CafeIAMRole:
@@ -64,9 +65,13 @@ Parameters:
     MinValue: 2  
 
   # RDS Database Password
-  DBPassword:
+  #DBPassword:
+    #Type: String
+    #NoEcho: true
+
+  DBSnapshotID:
     Type: String
-    NoEcho: true
+    Default: arn:aws:rds:us-east-1:073639462324:snapshot:cafe-db-initial
   
 
   AmazonLinuxAMIID:
@@ -143,7 +148,7 @@ Resources:
       InstanceType: t3.micro
       KeyName: !Ref CafeKeyPair
       ImageId: !Ref AmazonLinuxAMIID
-      IamInstanceProfile: !Select [1, !Split ["/", !Ref CafeIAMRole]]
+      IamInstanceProfile: !Ref CafeIAMRole
       SecurityGroupIds:
         - !Ref BastionSecurityGroup
       SubnetId:
@@ -164,16 +169,12 @@ Resources:
   # RDS Database
   CafeDatabase:
     Type: AWS::RDS::DBInstance
+    DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
     Properties:
       DBInstanceIdentifier: cafe-db
-      AllocatedStorage: 20
-      StorageType: gp2
+      DBSnapshotIdentifier: !Ref DBSnapshotID
       DBInstanceClass: db.t3.micro
-      Engine: mariadb
-      EngineVersion: 10.6.25
-      MasterUsername: admin
-      MasterUserPassword: !Ref DBPassword
-      MultiAZ: true
       DBSubnetGroupName: !Ref CafeDBSubnetGroup
       VPCSecurityGroups:
         - !Ref RDSSecurityGroup
