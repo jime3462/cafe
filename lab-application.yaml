@@ -35,7 +35,7 @@ Parameters:
     MaxLength: 15
     AllowedPattern: '^[0-9]{1,3}(\.[0-9]{1,3}){3}$'
     ConstraintDescription: Must be a valid IPv4 address in the format x.x.x.x
-    NoEcho: true
+    Default: 68.47.63.75
 
   # Existing AMI
   CafeAMI:
@@ -45,7 +45,7 @@ Parameters:
   # Existing IAM Role/Instance Profile
   CafeIAMRole:
     Type: String
-    Default: cafe-app-role
+    Default: arn:aws:iam::073639462324:instance-profile/cafe-app-role
 
 
   # Existing Key Pair
@@ -148,8 +148,6 @@ Resources:
       InstanceType: t3.micro
       KeyName: !Ref CafeKeyPair
       ImageId: !Ref AmazonLinuxAMIID
-      # AWS::EC2::Instance expects the instance profile NAME, not an ARN.
-      # Extract the name from the ARN parameter (e.g. ".../instance-profile/cafe-app-role" -> "cafe-app-role").
       IamInstanceProfile: !Select [1, !Split ['instance-profile/', !Ref CafeIAMRole]]
       SecurityGroupIds:
         - !Ref BastionSecurityGroup
